@@ -39,6 +39,19 @@ struct ProxyCommand: AsyncParsableCommand {
             logger: logger
         )
 
+        // Verify AWS credentials are resolvable before starting the server.
+        // This catches misconfiguration early (e.g. container without ~/.aws mount).
+        do {
+            _ = try await signingClient.awsClient.getCredential(logger: logger)
+            logger.info("AWS credentials resolved successfully")
+        } catch {
+            logger.critical("Failed to resolve AWS credentials. If running in a container, ensure AWS credentials are available via environment variables (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY), a mounted ~/.aws directory, or an instance profile (IMDS).")
+            logger.critical("Credential error: \(error)")
+            try await httpClient.shutdown().get()
+            try await signingClient.shutdown()
+            throw ExitCode.failure
+        }
+
         let app = buildApplication(
             config: config,
             httpClient: httpClient,
