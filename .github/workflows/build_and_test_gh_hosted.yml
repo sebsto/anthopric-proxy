@@ -8,30 +8,26 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
-
-# env:
-#   DEVELOPER_DIR: /Applications/Xcode_15.1.app/Contents/Developer
-
 jobs:
 
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
     container: swift:6.2-noble
 
     steps:
     - name: Checkout
       uses: actions/checkout@v6
-    - name: Build
-      run: |
-        swift build -c release
 
-  # disabled until this project compiles on Linux
-  test:
-    runs-on: ubuntu-latest
-    container: swift:6.2-noble
+    - name: Cache SPM dependencies
+      uses: actions/cache@v4
+      with:
+        path: .build
+        key: spm-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+        restore-keys: |
+          spm-${{ runner.os }}-
 
-    steps:
-    - uses: actions/checkout@v6
-    - name: Run tests
-      run: |
-        swift test
+    - name: Build (release)
+      run: swift build -c release
+
+    - name: Test
+      run: swift test
