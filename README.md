@@ -7,7 +7,7 @@ A self-hosted Swift 6 proxy that sits between Xcode 26 and Amazon Bedrock, trans
 ```
 ┌────────┐  OpenAI Chat Completions  ┌─────────────┐  Bedrock REST (SigV4)  ┌─────────┐
 │ Xcode  │ ────────────────────────► │anthopric-   │ ─────────────────────► │ Amazon  │
-│ (or    │  x-api-key: <key>        │proxy        │  AWS4-HMAC-SHA256      │ Bedrock │
+│ (or    │  x-api-key: <key>         │proxy        │  AWS4-HMAC-SHA256      │ Bedrock │
 │  curl) │ ◄──────────────────────── │(Hummingbird)│ ◄───────────────────── │(Claude) │
 │        │  SSE stream / JSON        │             │  EventStream / JSON    │         │
 └────────┘                           └─────────────┘                        └─────────┘
@@ -26,7 +26,7 @@ For the full design, see [docs/DESIGN.md](docs/DESIGN.md).
 ## Prerequisites
 
 - **Swift 6.0+** (tested with Swift 6.2)
-- **AWS credentials** configured via any standard method (environment variables, `~/.aws/credentials`, SSO, IAM roles)
+- **AWS credentials** configured via any standard method (environment variables, `~/.aws/credentials`, SSO, `aws login`, IAM roles)
 - **Bedrock model access** enabled in your AWS account for the Anthropic models you want to use
 - **macOS 15+** or **Linux** (builds on both)
 
@@ -63,6 +63,7 @@ Configuration is read from environment variables, with optional overrides from a
 |---|---|---|
 | `PROXY_HOST` | `127.0.0.1` | Listen address |
 | `PROXY_PORT` | `8080` | Listen port |
+| `AWS_PROFILE` | `default` | The name of the AWS profile in `~/.aws/config`  |
 | `AWS_REGION` / `AWS_DEFAULT_REGION` | `us-east-1` | AWS region for Bedrock API calls |
 | `PROXY_API_KEY` | _(required)_ | API key clients must provide via `x-api-key` header. Proxy refuses to start without one. |
 | `MODEL_CACHE_TTL_SECONDS` | `300` | How long to cache the Bedrock model list (seconds) |
@@ -78,6 +79,7 @@ You can also place a `config.json` file in the working directory. Environment va
 {
   "PROXY_HOST": "0.0.0.0",
   "PROXY_PORT": "8080",
+  "PROFILE_NAME": "work",
   "AWS_REGION": "us-west-2",
   "PROXY_API_KEY": "my-secret-key",
   "LOG_LEVEL": "debug"
@@ -87,12 +89,13 @@ You can also place a `config.json` file in the working directory. Environment va
 ## CLI Options
 
 ```
-USAGE: anthopric-proxy [--hostname <hostname>] [--port <port>]
+USAGE: anthopric-proxy [--hostname <hostname>] [--port <port>] [--aws-profile <aws-profile>]
 
 OPTIONS:
-  --hostname <hostname>   Hostname to listen on (default: 127.0.0.1)
-  --port <port>           Port to listen on (default: 8080)
-  -h, --help              Show help information.
+  --hostname <hostname>       Hostname to listen on (default: 127.0.0.1)
+  --port <port>               Port to listen on (default: 8080)
+  --aws-profile <aws-profile> AWS profile name from ~/.aws/config
+  -h, --help                  Show help information.
 ```
 
 CLI flags override both environment variables and `config.json`.
@@ -225,7 +228,9 @@ curl http://127.0.0.1:8080/v1/chat/completions \
 
    # Option B: SSO (recommended for local development)
    aws sso login --profile my-profile
-   export AWS_PROFILE=my-profile
+   swift run App --aws-profile my-profile
+   # Or via environment variable:
+   # export AWS_PROFILE=my-profile
 
    # Option C: IAM role (automatic on EC2/ECS/Lambda)
    # No configuration needed -- credentials are resolved via instance metadata.
