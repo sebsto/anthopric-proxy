@@ -17,8 +17,11 @@ struct ProxyCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Port to listen on")
     var port: Int = 8080
 
+    @Option(name: .long, help: "AWS profile name from ~/.aws/config")
+    var awsProfile: String?
+
     func run() async throws {
-        let config = await Config.load(hostnameOverride: hostname, portOverride: port)
+        let config = await Config.load(hostnameOverride: hostname, portOverride: port, awsProfileOverride: awsProfile)
         var logger = Logger(label: "anthopric-proxy")
         logger.logLevel = Logger.Level(rawValue: config.logLevel) ?? .info
 

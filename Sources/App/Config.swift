@@ -15,6 +15,7 @@ struct Config: Sendable {
     init(
         hostnameOverride: String? = nil,
         portOverride: Int? = nil,
+        awsProfileOverride: String? = nil,
         reader: ConfigReader
     ) {
         self.hostname = hostnameOverride
@@ -30,7 +31,7 @@ struct Config: Sendable {
         self.modelCacheTTL = reader.int(forKey: "MODEL_CACHE_TTL_SECONDS") ?? 300
         self.requestTimeout = reader.int(forKey: "REQUEST_TIMEOUT_SECONDS") ?? 600
         self.modelsTimeout = reader.int(forKey: "MODELS_TIMEOUT_SECONDS") ?? 30
-        self.awsProfile = reader.string(forKey: "AWS_PROFILE")
+        self.awsProfile = awsProfileOverride ?? reader.string(forKey: "AWS_PROFILE")
         self.logLevel = reader.string(forKey: "LOG_LEVEL") ?? "info"
     }
 
@@ -59,6 +60,7 @@ struct Config: Sendable {
     static func load(
         hostnameOverride: String? = nil,
         portOverride: Int? = nil,
+        awsProfileOverride: String? = nil,
         configFile: String = "config.json"
     ) async -> Config {
         var providers: [any ConfigProvider] = [
@@ -76,6 +78,7 @@ struct Config: Sendable {
         return Config(
             hostnameOverride: hostnameOverride,
             portOverride: portOverride,
+            awsProfileOverride: awsProfileOverride,
             reader: reader
         )
     }
