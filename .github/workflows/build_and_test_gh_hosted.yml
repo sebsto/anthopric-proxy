@@ -22,12 +22,31 @@ jobs:
       uses: actions/cache@v4
       with:
         path: .build
-        key: spm-v2-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+        key: spm-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
         restore-keys: |
           spm-v2-${{ runner.os }}-
 
     - name: Build (release)
       run: swift build -c release
+
+    - name: Test
+      run: swift test
+
+  code-coverage:
+    runs-on: ubuntu-latest
+    container: swift:6.2-noble
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v6
+
+    - name: Cache SPM dependencies
+      uses: actions/cache@v4
+      with:
+        path: .build
+        key: spm-cov-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+        restore-keys: |
+          spm-cov-${{ runner.os }}-
 
     - name: Test with coverage
       run: swift test --enable-code-coverage
