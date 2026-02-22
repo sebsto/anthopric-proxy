@@ -9,5 +9,5 @@ RUN swift build -c release
 
 # Stage 2: Runtime (swift base includes all required shared libraries)
 FROM swift:6.2-slim
-COPY --from=builder /app/.build/release/App /usr/local/bin/anthopric-proxy
-ENTRYPOINT ["anthopric-proxy"]
+COPY --from=builder /app/.build/release/App /usr/local/bin/anthropic-proxy
+ENTRYPOINT ["anthropic-proxy"]

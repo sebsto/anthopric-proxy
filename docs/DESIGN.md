@@ -1,4 +1,4 @@
-# Design Doc: OpenAI-to-Bedrock Proxy ("anthopric-proxy")
+# Design Doc: OpenAI-to-Bedrock Proxy ("anthropic-proxy")
 
 ## Context
 
@@ -634,7 +634,7 @@ platforms: [.macOS(.v14)]
 ## Project Structure
 
 ```
-anthopric-proxy/
+anthropic-proxy/
 ├── Package.swift
 ├── Sources/
 │   └── App/
@@ -677,10 +677,10 @@ anthopric-proxy/
 
 ```bash
 # Build the Containerfile
-container build --tag anthopric-proxy-test -f ./Containerfile
+container build --tag anthropic-proxy-test -f ./Containerfile
 
 # Run tests inside the container
-container run anthopric-proxy-test swift test
+container run anthropic-proxy-test swift test
 ```
 
 **Containerfile:**

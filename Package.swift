@@ -3,7 +3,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "anthopric-proxy",
+    name: "anthropic-proxy",
     platforms: [
         .macOS(.v15)
     ],

@@ -1,4 +1,4 @@
-# anthopric-proxy
+# anthropic-proxy
 
 A self-hosted Swift 6 proxy that sits between Xcode 26 and Amazon Bedrock, translating between the OpenAI Chat Completions API and Bedrock's SigV4-signed, binary EventStream protocol.
 
@@ -6,7 +6,7 @@ A self-hosted Swift 6 proxy that sits between Xcode 26 and Amazon Bedrock, trans
 
 ```
 ┌────────┐  OpenAI Chat Completions  ┌─────────────┐  Bedrock REST (SigV4)  ┌─────────┐
-│ Xcode  │ ────────────────────────► │anthopric-   │ ─────────────────────► │ Amazon  │
+│ Xcode  │ ────────────────────────► │anthropic-   │ ─────────────────────► │ Amazon  │
 │ (or    │  x-api-key: <key>         │proxy        │  AWS4-HMAC-SHA256      │ Bedrock │
 │  curl) │ ◄──────────────────────── │(Hummingbird)│ ◄───────────────────── │(Claude) │
 │        │  SSE stream / JSON        │             │  EventStream / JSON    │         │
@@ -34,8 +34,8 @@ For the full design, see [docs/DESIGN.md](docs/DESIGN.md).
 
 ```bash
 # Clone
-git clone https://github.com/your-org/anthopric-proxy.git
-cd anthopric-proxy
+git clone https://github.com/your-org/anthropic-proxy.git
+cd anthropic-proxy
 
 # Build
 swift build
@@ -89,7 +89,7 @@ You can also place a `config.json` file in the working directory. Environment va
 ## CLI Options
 
 ```
-USAGE: anthopric-proxy [--hostname <hostname>] [--port <port>] [--aws-profile <aws-profile>]
+USAGE: anthropic-proxy [--hostname <hostname>] [--port <port>] [--aws-profile <aws-profile>]
 
 OPTIONS:
   --hostname <hostname>       Hostname to listen on (default: 127.0.0.1)
@@ -117,7 +117,7 @@ Build and run with [Apple Container](https://github.com/apple/container):
 
 ```bash
 # Build the image
-container build --tag anthopric-proxy -f ./Containerfile
+container build --tag anthropic-proxy -f ./Containerfile
 
 # Run (pass AWS credentials via environment)
 eval $(aws configure export-credentials --profile work --format env)
@@ -128,11 +128,11 @@ container run \
   -e AWS_SESSION_TOKEN \
   -e AWS_REGION=us-east-1 \
   -e PROXY_API_KEY=my-secret-key \
-  anthopric-proxy --hostname 0.0.0.0
+  anthropic-proxy --hostname 0.0.0.0
 
 # Run tests inside a container
-container build --tag anthopric-proxy-test -f ./Containerfile --target builder
-container run anthopric-proxy-test swift test
+container build --tag anthropic-proxy-test -f ./Containerfile --target builder
+container run anthropic-proxy-test swift test
 ```
 
 The Containerfile uses a multi-stage build: Swift 6.2 for compilation, `swift:6.2-slim` for the runtime image.

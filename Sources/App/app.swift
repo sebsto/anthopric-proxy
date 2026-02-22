@@ -7,7 +7,7 @@ import ServiceLifecycle
 @main
 struct ProxyCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "anthopric-proxy",
+        commandName: "anthropic-proxy",
         abstract: "OpenAI-to-Bedrock proxy for Xcode"
     )
 
@@ -22,7 +22,7 @@ struct ProxyCommand: AsyncParsableCommand {
 
     func run() async throws {
         let config = await Config.load(hostnameOverride: hostname, portOverride: port, awsProfileOverride: awsProfile)
-        var logger = Logger(label: "anthopric-proxy")
+        var logger = Logger(label: "anthropic-proxy")
         logger.logLevel = Logger.Level(rawValue: config.logLevel) ?? .info
 
         guard config.proxyAPIKey != nil else {
