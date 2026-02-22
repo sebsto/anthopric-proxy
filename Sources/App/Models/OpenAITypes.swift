@@ -4,41 +4,7 @@ import FoundationEssentials
 import Foundation
 #endif
 
-// MARK: - Request
-
-struct ChatCompletionRequest: Codable, Sendable {
-    var model: String
-    var messages: [ChatMessage]
-    var stream: Bool?
-    var streamOptions: StreamOptions?
-    var tools: [Tool]?
-    var toolChoice: ToolChoice?
-    var maxTokens: Int?
-    var maxCompletionTokens: Int?
-    var temperature: Double?
-    var topP: Double?
-    var stop: Stop?
-    var n: Int?
-
-    enum CodingKeys: String, CodingKey {
-        case model, messages, stream, tools, temperature, n, stop
-        case streamOptions = "stream_options"
-        case toolChoice = "tool_choice"
-        case maxTokens = "max_tokens"
-        case maxCompletionTokens = "max_completion_tokens"
-        case topP = "top_p"
-    }
-}
-
-struct StreamOptions: Codable, Sendable {
-    var includeUsage: Bool?
-
-    enum CodingKeys: String, CodingKey {
-        case includeUsage = "include_usage"
-    }
-}
-
-// MARK: - Messages
+// MARK: - Outbound Messages
 
 struct ChatMessage: Sendable {
     var role: String
@@ -122,87 +88,7 @@ struct ContentPart: Codable, Sendable, Equatable {
     var text: String?
 }
 
-// MARK: - Tools
-
-struct Tool: Codable, Sendable {
-    var type: String
-    var function: FunctionDefinition?
-}
-
-struct FunctionDefinition: Codable, Sendable {
-    var name: String
-    var description: String?
-    var parameters: JSONValue?
-}
-
-enum ToolChoice: Sendable {
-    case auto
-    case none
-    case required
-    case function(name: String)
-}
-
-extension ToolChoice: Codable {
-    private struct FunctionWrapper: Codable, Sendable {
-        var type: String
-        var function: FunctionName
-    }
-
-    private struct FunctionName: Codable, Sendable {
-        var name: String
-    }
-
-    init(from decoder: any Decoder) throws {
-        let container = try decoder.singleValueContainer()
-
-        if let stringValue = try? container.decode(String.self) {
-            switch stringValue {
-            case "auto":
-                self = .auto
-            case "none":
-                self = .none
-            case "required":
-                self = .required
-            default:
-                throw DecodingError.dataCorrupted(
-                    DecodingError.Context(
-                        codingPath: decoder.codingPath,
-                        debugDescription: "Unknown tool_choice string: \(stringValue)"
-                    )
-                )
-            }
-            return
-        }
-
-        if let wrapper = try? container.decode(FunctionWrapper.self) {
-            self = .function(name: wrapper.function.name)
-            return
-        }
-
-        throw DecodingError.typeMismatch(
-            ToolChoice.self,
-            DecodingError.Context(
-                codingPath: decoder.codingPath,
-                debugDescription: "Expected string or object for tool_choice"
-            )
-        )
-    }
-
-    func encode(to encoder: any Encoder) throws {
-        var container = encoder.singleValueContainer()
-
-        switch self {
-        case .auto:
-            try container.encode("auto")
-        case .none:
-            try container.encode("none")
-        case .required:
-            try container.encode("required")
-        case .function(let name):
-            try container.encode(FunctionWrapper(type: "function", function: FunctionName(name: name)))
-        }
-    }
-}
+// MARK: - Tool Calls (outbound)
 
 struct ToolCall: Codable, Sendable {
     var id: String
@@ -225,46 +111,6 @@ struct StreamingToolCall: Codable, Sendable {
 struct StreamingFunctionCall: Codable, Sendable {
     var name: String?
     var arguments: String
-}
-
-enum Stop: Sendable, Equatable {
-    case string(String)
-    case array([String])
-}
-
-extension Stop: Codable {
-    init(from decoder: any Decoder) throws {
-        let container = try decoder.singleValueContainer()
-
-        if let stringValue = try? container.decode(String.self) {
-            self = .string(stringValue)
-            return
-        }
-
-        if let arrayValue = try? container.decode([String].self) {
-            self = .array(arrayValue)
-            return
-        }
-
-        throw DecodingError.typeMismatch(
-            Stop.self,
-            DecodingError.Context(
-                codingPath: decoder.codingPath,
-                debugDescription: "Expected string or array of strings for stop"
-            )
-        )
-    }
-
-    func encode(to encoder: any Encoder) throws {
-        var container = encoder.singleValueContainer()
-
-        switch self {
-        case .string(let value):
-            try container.encode(value)
-        case .array(let value):
-            try container.encode(value)
-        }
-    }
 }
 
 // MARK: - Response

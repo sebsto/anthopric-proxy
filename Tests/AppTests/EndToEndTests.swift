@@ -84,18 +84,14 @@ private func makeBedrockResponseBody(
 
 private func makeOpenAIRequestBody(
     model: String = "anthropic.claude-sonnet-4-5-20250514-v1:0",
-    messages: [ChatMessage]? = nil,
+    messagesJSON: String? = nil,
     stream: Bool = false
 ) throws -> ByteBuffer {
-    let request = ChatCompletionRequest(
-        model: model,
-        messages: messages ?? [
-            ChatMessage(role: "user", content: .string("Say hello.")),
-        ],
-        stream: stream
-    )
-    let data = try JSONEncoder().encode(request)
-    return ByteBuffer(data: data)
+    let messages = messagesJSON ?? #"[{"role": "user", "content": "Say hello."}]"#
+    let json = """
+    {"model": "\(model)", "messages": \(messages), "stream": \(stream)}
+    """
+    return ByteBuffer(data: Data(json.utf8))
 }
 
 private let testAPIKey = "test-api-key"
@@ -181,7 +177,7 @@ struct EndToEndTests {
         try await app.test(.router) { client in
             let requestBody = try makeOpenAIRequestBody(
                 model: "anthropic.claude-sonnet-4-5-20250514-v1:0",
-                messages: []
+                messagesJSON: "[]"
             )
 
             let response = try await client.executeRequest(
@@ -211,7 +207,7 @@ struct EndToEndTests {
         try await app.test(.router) { client in
             let requestBody = try makeOpenAIRequestBody(
                 model: "",
-                messages: [ChatMessage(role: "user", content: .string("Hello"))]
+                messagesJSON: #"[{"role": "user", "content": "Hello"}]"#
             )
 
             let response = try await client.executeRequest(

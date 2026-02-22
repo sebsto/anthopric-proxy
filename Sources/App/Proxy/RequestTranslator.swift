@@ -17,8 +17,9 @@ struct RequestTranslation: Sendable {
 // MARK: - Errors
 
 enum TranslationError: Error {
+    case missingModel
     case emptyMessages
-    case missingFunctionDefinition(toolType: String)
+    case missingFunctionDefinition(toolIndex: Int)
 }
 
 // MARK: - Translator
@@ -26,94 +27,104 @@ enum TranslationError: Error {
 struct RequestTranslator: Sendable {
 
     func translate(
-        _ request: ChatCompletionRequest,
+        _ request: [String: JSONValue],
         resolveModel: (String) throws -> String
     ) throws -> RequestTranslation {
 
         // 1. Model resolution
-        let originalModel = request.model
+        guard let originalModel = request["model"]?.stringValue, !originalModel.isEmpty else {
+            throw TranslationError.missingModel
+        }
         let strippedModel = originalModel.hasPrefix("anthropic/")
             ? String(originalModel.dropFirst("anthropic/".count))
             : originalModel
         let bedrockModelId = try resolveModel(strippedModel)
 
-        // 2. Streaming
-        let isStreaming = request.stream ?? false
+        // 2. Messages
+        guard let messagesArray = request["messages"]?.arrayValue, !messagesArray.isEmpty else {
+            throw TranslationError.emptyMessages
+        }
 
-        // 3. stream_options → includeUsage
-        let includeUsage = request.streamOptions?.includeUsage ?? false
+        // 3. Streaming
+        let isStreaming = request["stream"]?.boolValue ?? false
 
-        // 4. System messages
-        let systemMessages = request.messages.filter { $0.role == "system" }
+        // 4. stream_options → includeUsage
+        let includeUsage = request["stream_options"]?["include_usage"]?.boolValue ?? false
+
+        // 5. System messages
+        let systemMessages = messagesArray.filter { $0["role"]?.stringValue == "system" }
         let systemText = systemMessages.compactMap { msg -> String? in
-            guard let content = msg.content else { return nil }
-            switch content {
-            case .string(let text):
-                return text
-            case .parts(let parts):
-                return parts.compactMap(\.text).joined(separator: "\n")
-            }
+            extractTextFromContent(msg["content"])
         }.joined(separator: "\n")
 
-        let nonSystemMessages = request.messages.filter { $0.role != "system" }
+        let nonSystemMessages = messagesArray.filter { $0["role"]?.stringValue != "system" }
 
-        // 5-7. Translate messages (with adjacent tool-result merging)
+        // 6. Translate messages (with adjacent tool-result merging)
         let anthropicMessages = translateMessages(nonSystemMessages)
 
-        // 8. Tools
-        let anthropicTools: [AnthropicTool]? = try request.tools.flatMap { tools -> [AnthropicTool]? in
+        // 7. Tools
+        let anthropicTools: [AnthropicTool]? = try request["tools"]?.arrayValue.flatMap { tools -> [AnthropicTool]? in
             guard !tools.isEmpty else { return nil }
-            return try tools.map { tool in
-                guard let function = tool.function else {
-                    throw TranslationError.missingFunctionDefinition(toolType: tool.type)
+            return try tools.enumerated().map { index, tool in
+                guard let function = tool["function"] else {
+                    throw TranslationError.missingFunctionDefinition(toolIndex: index)
                 }
                 return AnthropicTool(
-                    name: function.name,
-                    description: function.description,
-                    inputSchema: function.parameters
+                    name: function["name"]?.stringValue ?? "",
+                    description: function["description"]?.stringValue,
+                    inputSchema: function["parameters"]
                 )
             }
         }
 
-        // 9. tool_choice
-        let anthropicToolChoice: AnthropicToolChoice? = request.toolChoice.flatMap { choice in
-            switch choice {
-            case .auto:
-                return AnthropicToolChoice(type: "auto")
-            case .none:
-                return nil
-            case .required:
-                return AnthropicToolChoice(type: "any")
-            case .function(let name):
+        // 8. tool_choice
+        let anthropicToolChoice: AnthropicToolChoice? = request["tool_choice"].flatMap { choice in
+            if let str = choice.stringValue {
+                switch str {
+                case "auto": return AnthropicToolChoice(type: "auto")
+                case "none": return nil
+                case "required": return AnthropicToolChoice(type: "any")
+                default: return nil
+                }
+            }
+            if let name = choice["function"]?["name"]?.stringValue {
                 return AnthropicToolChoice(type: "tool", name: name)
             }
+            return nil
         }
 
-        // 10. max_tokens
-        let maxTokens = request.maxTokens ?? request.maxCompletionTokens ?? 8192
+        // 9. max_tokens
+        let maxTokens = request["max_tokens"]?.intValue
+            ?? request["max_completion_tokens"]?.intValue
+            ?? 8192
 
-        // 12. stop → stop_sequences
-        let stopSequences: [String]? = request.stop.map { stop in
-            switch stop {
-            case .string(let value):
-                return [value]
-            case .array(let values):
-                return values
+        // 10. Temperature / topP
+        let temperature = request["temperature"]?.doubleValue
+        let topP = request["top_p"]?.doubleValue
+
+        // 11. stop → stop_sequences
+        let stopSequences: [String]? = request["stop"].flatMap { stop in
+            if let str = stop.stringValue {
+                return [str]
             }
+            if let arr = stop.arrayValue {
+                return arr.compactMap(\.stringValue)
+            }
+            return nil
         }
 
         // Build the Bedrock URL path
         let action = isStreaming ? "invoke-with-response-stream" : "invoke"
         let bedrockPath = "/model/\(bedrockModelId)/\(action)"
 
-        // 13. Assemble the Bedrock request body
+        // 12. Assemble the Bedrock request body
         let bedrockBody = BedrockInvokeRequest(
             anthropicVersion: "bedrock-2023-05-31",
             maxTokens: maxTokens,
             system: systemText.isEmpty ? nil : systemText,
             messages: anthropicMessages,
-            temperature: request.temperature,
-            topP: request.topP,
+            temperature: temperature,
+            topP: topP,
             stopSequences: stopSequences,
             tools: anthropicTools,
             toolChoice: anthropicToolChoice
@@ -130,11 +141,13 @@ struct RequestTranslator: Sendable {
 
     // MARK: - Message Translation
 
-    private func translateMessages(_ messages: [ChatMessage]) -> [AnthropicMessage] {
+    private func translateMessages(_ messages: [JSONValue]) -> [AnthropicMessage] {
         var result: [AnthropicMessage] = []
 
         for message in messages {
-            switch message.role {
+            let role = message["role"]?.stringValue ?? "user"
+
+            switch role {
             case "user":
                 result.append(translateUserMessage(message))
 
@@ -142,11 +155,10 @@ struct RequestTranslator: Sendable {
                 result.append(translateAssistantMessage(message))
 
             case "tool":
+                let toolUseId = message["tool_call_id"]?.stringValue ?? ""
+                let content = extractTextFromContent(message["content"])
                 let toolResultBlock = AnthropicContentBlock.toolResult(
-                    ToolResultBlock(
-                        toolUseId: message.toolCallId ?? "",
-                        content: extractTextContent(message.content)
-                    )
+                    ToolResultBlock(toolUseId: toolUseId, content: content)
                 )
                 // Merge adjacent tool results into a single user message
                 if let last = result.last, last.role == "user", case .blocks(let existing) = last.content {
@@ -168,10 +180,8 @@ struct RequestTranslator: Sendable {
                 ))
 
             default:
-                result.append(AnthropicMessage(
-                    role: message.role,
-                    content: translateContent(message.content)
-                ))
+                let content = translateContent(message["content"])
+                result.append(AnthropicMessage(role: role, content: content))
             }
         }
 
@@ -180,17 +190,19 @@ struct RequestTranslator: Sendable {
 
     // MARK: - User Message
 
-    private func translateUserMessage(_ message: ChatMessage) -> AnthropicMessage {
+    private func translateUserMessage(_ message: JSONValue) -> AnthropicMessage {
         let content: AnthropicContent
-        switch message.content {
-        case .string(let text):
+        let rawContent = message["content"]
+
+        if let text = rawContent?.stringValue {
             content = .blocks([.text(TextBlock(text: text))])
-        case .parts(let parts):
+        } else if let parts = rawContent?.arrayValue {
             content = .blocks(parts.compactMap { part -> AnthropicContentBlock? in
-                guard part.type == "text", let text = part.text else { return nil }
+                guard part["type"]?.stringValue == "text",
+                      let text = part["text"]?.stringValue else { return nil }
                 return .text(TextBlock(text: text))
             })
-        case .none:
+        } else {
             content = .blocks([])
         }
         return AnthropicMessage(role: "user", content: content)
@@ -198,32 +210,32 @@ struct RequestTranslator: Sendable {
 
     // MARK: - Assistant Message
 
-    private func translateAssistantMessage(_ message: ChatMessage) -> AnthropicMessage {
+    private func translateAssistantMessage(_ message: JSONValue) -> AnthropicMessage {
         var blocks: [AnthropicContentBlock] = []
 
         // Text content first
-        if let msgContent = message.content {
-            switch msgContent {
-            case .string(let text) where !text.isEmpty:
-                blocks.append(.text(TextBlock(text: text)))
-            case .parts(let parts):
-                for part in parts {
-                    if part.type == "text", let text = part.text {
-                        blocks.append(.text(TextBlock(text: text)))
-                    }
+        let rawContent = message["content"]
+        if let text = rawContent?.stringValue, !text.isEmpty {
+            blocks.append(.text(TextBlock(text: text)))
+        } else if let parts = rawContent?.arrayValue {
+            for part in parts {
+                if part["type"]?.stringValue == "text",
+                   let text = part["text"]?.stringValue {
+                    blocks.append(.text(TextBlock(text: text)))
                 }
-            default:
-                break
             }
         }
 
         // Tool calls
-        if let toolCalls = message.toolCalls {
+        if let toolCalls = message["tool_calls"]?.arrayValue {
             for tc in toolCalls {
+                let id = tc["id"]?.stringValue ?? ""
+                let name = tc["function"]?["name"]?.stringValue ?? ""
+                let args = tc["function"]?["arguments"]?.stringValue ?? "{}"
                 blocks.append(.toolUse(ToolUseBlock(
-                    id: tc.id,
-                    name: tc.function.name,
-                    input: parseJSONArguments(tc.function.arguments)
+                    id: id,
+                    name: name,
+                    input: parseJSONArguments(args)
                 )))
             }
         }
@@ -236,28 +248,31 @@ struct RequestTranslator: Sendable {
 
     // MARK: - Helpers
 
-    private func translateContent(_ content: MessageContent?) -> AnthropicContent {
+    private func translateContent(_ content: JSONValue?) -> AnthropicContent {
         guard let content else { return .string("") }
-        switch content {
-        case .string(let text):
+        if let text = content.stringValue {
             return .string(text)
-        case .parts(let parts):
+        }
+        if let parts = content.arrayValue {
             return .blocks(parts.compactMap { part -> AnthropicContentBlock? in
-                guard part.type == "text", let text = part.text else { return nil }
+                guard part["type"]?.stringValue == "text",
+                      let text = part["text"]?.stringValue else { return nil }
                 return .text(TextBlock(text: text))
             })
         }
+        return .string("")
     }
 
-    private func extractTextContent(_ content: MessageContent?) -> String? {
+    private func extractTextFromContent(_ content: JSONValue?) -> String? {
         guard let content else { return nil }
-        switch content {
-        case .string(let text):
+        if let text = content.stringValue {
             return text
-        case .parts(let parts):
-            let texts = parts.compactMap(\.text)
+        }
+        if let parts = content.arrayValue {
+            let texts = parts.compactMap { $0["text"]?.stringValue }
             return texts.isEmpty ? nil : texts.joined(separator: "\n")
         }
+        return nil
     }
 
     private func parseJSONArguments(_ jsonString: String) -> JSONValue {

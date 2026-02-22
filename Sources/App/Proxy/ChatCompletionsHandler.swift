@@ -21,12 +21,12 @@ struct ChatCompletionsHandler<Signer: RequestSigning, Client: HTTPRequestSending
     let logger: Logger
 
     func handle(request: Request, context: some RequestContext) async throws -> Response {
-        // 1. Decode request body
+        // 1. Decode request body as loose JSON
         let bodyBuffer = try await request.body.collect(upTo: 10 * 1024 * 1024) // 10 MB max
-        let chatRequest: ChatCompletionRequest
+        let chatRequest: [String: JSONValue]
         do {
             chatRequest = try JSONDecoder().decode(
-                ChatCompletionRequest.self,
+                [String: JSONValue].self,
                 from: bodyBuffer
             )
         } catch {
@@ -38,8 +38,9 @@ struct ChatCompletionsHandler<Signer: RequestSigning, Client: HTTPRequestSending
             )
         }
 
-        // 2. Validate required fields
-        guard !chatRequest.model.isEmpty else {
+        // 2. Early validation
+        let modelString = chatRequest["model"]?.stringValue ?? ""
+        guard !modelString.isEmpty else {
             return makeOpenAIErrorResponse(
                 status: .badRequest,
                 message: "The 'model' field is required.",
@@ -48,7 +49,7 @@ struct ChatCompletionsHandler<Signer: RequestSigning, Client: HTTPRequestSending
             )
         }
 
-        guard !chatRequest.messages.isEmpty else {
+        guard let messages = chatRequest["messages"]?.arrayValue, !messages.isEmpty else {
             return makeOpenAIErrorResponse(
                 status: .badRequest,
                 message: "The 'messages' field must be a non-empty array.",
@@ -57,14 +58,14 @@ struct ChatCompletionsHandler<Signer: RequestSigning, Client: HTTPRequestSending
             )
         }
 
-        // 3. Resolve model and translate request
+        // 3. Resolve model
         let resolvedModelID: String
         do {
-            resolvedModelID = try await modelsHandler.resolveModelID(chatRequest.model)
+            resolvedModelID = try await modelsHandler.resolveModelID(modelString)
         } catch is ModelError {
             return makeOpenAIErrorResponse(
                 status: .notFound,
-                message: "The model '\(chatRequest.model)' does not exist or is not available.",
+                message: "The model '\(modelString)' does not exist or is not available.",
                 type: "invalid_request_error",
                 code: "model_not_found"
             )
@@ -77,11 +78,28 @@ struct ChatCompletionsHandler<Signer: RequestSigning, Client: HTTPRequestSending
             )
         }
 
+        // 3. Translate request
         let translation: RequestTranslation
         do {
             translation = try RequestTranslator().translate(chatRequest) { _ in
                 resolvedModelID
             }
+        } catch let error as TranslationError {
+            let message: String
+            switch error {
+            case .missingModel:
+                message = "The 'model' field is required."
+            case .emptyMessages:
+                message = "The 'messages' field must be a non-empty array."
+            case .missingFunctionDefinition(let index):
+                message = "Tool at index \(index) is missing a function definition."
+            }
+            return makeOpenAIErrorResponse(
+                status: .badRequest,
+                message: message,
+                type: "invalid_request_error",
+                code: "invalid_request"
+            )
         } catch {
             return makeOpenAIErrorResponse(
                 status: .badRequest,

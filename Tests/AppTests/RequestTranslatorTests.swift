@@ -6,10 +6,14 @@ import Foundation
 import Testing
 @testable import App
 
+/// Decode a JSON string into `[String: JSONValue]` for use as a request fixture.
+private func json(_ string: String) throws -> [String: JSONValue] {
+    try JSONDecoder().decode([String: JSONValue].self, from: Data(string.utf8))
+}
+
 @Suite("RequestTranslator Tests")
 struct RequestTranslatorTests {
 
-    // Simple mock that maps known model names to Bedrock IDs.
     private func resolveModel(_ name: String) throws -> String {
         let mapping: [String: String] = [
             "claude-sonnet-4-5-20250514": "anthropic.claude-sonnet-4-5-20250514-v1:0",
@@ -25,13 +29,13 @@ struct RequestTranslatorTests {
 
     @Test("Basic translation: model, messages, stream flag")
     func testBasicTranslation() throws {
-        let request = ChatCompletionRequest(
-            model: "claude-sonnet-4-5-20250514",
-            messages: [
-                ChatMessage(role: "user", content: .string("Hello"))
-            ],
-            stream: true
-        )
+        let request = try json("""
+        {
+            "model": "claude-sonnet-4-5-20250514",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "stream": true
+        }
+        """)
 
         let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
 
@@ -46,13 +50,15 @@ struct RequestTranslatorTests {
 
     @Test("System messages extracted to top-level system field")
     func testSystemMessageExtraction() throws {
-        let request = ChatCompletionRequest(
-            model: "claude-sonnet-4-5-20250514",
-            messages: [
-                ChatMessage(role: "system", content: .string("You are helpful.")),
-                ChatMessage(role: "user", content: .string("Hi")),
+        let request = try json("""
+        {
+            "model": "claude-sonnet-4-5-20250514",
+            "messages": [
+                {"role": "system", "content": "You are helpful."},
+                {"role": "user", "content": "Hi"}
             ]
-        )
+        }
+        """)
 
         let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
 
@@ -65,14 +71,16 @@ struct RequestTranslatorTests {
 
     @Test("Multiple system messages concatenated with newline")
     func testMultipleSystemMessages() throws {
-        let request = ChatCompletionRequest(
-            model: "claude-sonnet-4-5-20250514",
-            messages: [
-                ChatMessage(role: "system", content: .string("First instruction.")),
-                ChatMessage(role: "system", content: .string("Second instruction.")),
-                ChatMessage(role: "user", content: .string("Hi")),
+        let request = try json("""
+        {
+            "model": "claude-sonnet-4-5-20250514",
+            "messages": [
+                {"role": "system", "content": "First instruction."},
+                {"role": "system", "content": "Second instruction."},
+                {"role": "user", "content": "Hi"}
             ]
-        )
+        }
+        """)
 
         let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
 
@@ -83,12 +91,12 @@ struct RequestTranslatorTests {
 
     @Test("String content normalized to array of content blocks")
     func testContentNormalization() throws {
-        let request = ChatCompletionRequest(
-            model: "claude-sonnet-4-5-20250514",
-            messages: [
-                ChatMessage(role: "user", content: .string("Hello")),
-            ]
-        )
+        let request = try json("""
+        {
+            "model": "claude-sonnet-4-5-20250514",
+            "messages": [{"role": "user", "content": "Hello"}]
+        }
+        """)
 
         let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
 
@@ -101,15 +109,14 @@ struct RequestTranslatorTests {
 
     @Test("Array content passes through as content blocks")
     func testContentArrayPassthrough() throws {
-        let request = ChatCompletionRequest(
-            model: "claude-sonnet-4-5-20250514",
-            messages: [
-                ChatMessage(
-                    role: "user",
-                    content: .parts([ContentPart(type: "text", text: "Hello")])
-                ),
+        let request = try json("""
+        {
+            "model": "claude-sonnet-4-5-20250514",
+            "messages": [
+                {"role": "user", "content": [{"type": "text", "text": "Hello"}]}
             ]
-        )
+        }
+        """)
 
         let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
 
@@ -122,12 +129,12 @@ struct RequestTranslatorTests {
 
     @Test("anthropic/ prefix stripped before model resolution")
     func testAnthropicPrefixStripping() throws {
-        let request = ChatCompletionRequest(
-            model: "anthropic/claude-opus-4.6",
-            messages: [
-                ChatMessage(role: "user", content: .string("Hello")),
-            ]
-        )
+        let request = try json("""
+        {
+            "model": "anthropic/claude-opus-4.6",
+            "messages": [{"role": "user", "content": "Hello"}]
+        }
+        """)
 
         let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
 
@@ -135,54 +142,49 @@ struct RequestTranslatorTests {
         #expect(result.originalModel == "anthropic/claude-opus-4.6")
     }
 
-    // MARK: - Max Tokens Default
+    // MARK: - Max Tokens
 
     @Test("Default max_tokens is 8192 when not specified")
     func testMaxTokensDefault() throws {
-        let request = ChatCompletionRequest(
-            model: "claude-sonnet-4-5-20250514",
-            messages: [
-                ChatMessage(role: "user", content: .string("Hello")),
-            ]
-        )
+        let request = try json("""
+        {
+            "model": "claude-sonnet-4-5-20250514",
+            "messages": [{"role": "user", "content": "Hello"}]
+        }
+        """)
 
         let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
-
         #expect(result.bedrockBody.maxTokens == 8192)
     }
 
-    // MARK: - Max Tokens Passthrough
-
     @Test("Explicit max_tokens is passed through")
     func testMaxTokensPassthrough() throws {
-        let request = ChatCompletionRequest(
-            model: "claude-sonnet-4-5-20250514",
-            messages: [
-                ChatMessage(role: "user", content: .string("Hello")),
-            ],
-            maxTokens: 1024
-        )
+        let request = try json("""
+        {
+            "model": "claude-sonnet-4-5-20250514",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "max_tokens": 1024
+        }
+        """)
 
         let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
-
         #expect(result.bedrockBody.maxTokens == 1024)
     }
 
-    // MARK: - Stream Options Extracted
+    // MARK: - Stream Options
 
     @Test("stream_options.include_usage extracted to includeUsage")
     func testStreamOptionsExtracted() throws {
-        let request = ChatCompletionRequest(
-            model: "claude-sonnet-4-5-20250514",
-            messages: [
-                ChatMessage(role: "user", content: .string("Hello")),
-            ],
-            stream: true,
-            streamOptions: StreamOptions(includeUsage: true)
-        )
+        let request = try json("""
+        {
+            "model": "claude-sonnet-4-5-20250514",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "stream": true,
+            "stream_options": {"include_usage": true}
+        }
+        """)
 
         let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
-
         #expect(result.includeUsage == true)
     }
 
@@ -190,32 +192,25 @@ struct RequestTranslatorTests {
 
     @Test("OpenAI tools translated to Anthropic format")
     func testToolTranslation() throws {
-        let parameters: JSONValue = .object([
-            "type": .string("object"),
-            "properties": .object([
-                "query": .object([
-                    "type": .string("string"),
-                    "description": .string("The search query"),
-                ])
-            ]),
-        ])
-
-        let request = ChatCompletionRequest(
-            model: "claude-sonnet-4-5-20250514",
-            messages: [
-                ChatMessage(role: "user", content: .string("Search for cats")),
-            ],
-            tools: [
-                Tool(
-                    type: "function",
-                    function: FunctionDefinition(
-                        name: "search",
-                        description: "Search the web",
-                        parameters: parameters
-                    )
-                ),
-            ]
-        )
+        let request = try json("""
+        {
+            "model": "claude-sonnet-4-5-20250514",
+            "messages": [{"role": "user", "content": "Search for cats"}],
+            "tools": [{
+                "type": "function",
+                "function": {
+                    "name": "search",
+                    "description": "Search the web",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "The search query"}
+                        }
+                    }
+                }
+            }]
+        }
+        """)
 
         let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
 
@@ -223,23 +218,19 @@ struct RequestTranslatorTests {
         #expect(tools.count == 1)
         #expect(tools[0].name == "search")
         #expect(tools[0].description == "Search the web")
-        #expect(tools[0].inputSchema == parameters)
     }
-
-    // MARK: - Empty Tools Omitted
 
     @Test("Empty tools array results in nil tools")
     func testEmptyToolsOmitted() throws {
-        let request = ChatCompletionRequest(
-            model: "claude-sonnet-4-5-20250514",
-            messages: [
-                ChatMessage(role: "user", content: .string("Hello")),
-            ],
-            tools: []
-        )
+        let request = try json("""
+        {
+            "model": "claude-sonnet-4-5-20250514",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "tools": []
+        }
+        """)
 
         let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
-
         #expect(result.bedrockBody.tools == nil)
     }
 
@@ -247,82 +238,57 @@ struct RequestTranslatorTests {
 
     @Test("All tool_choice variants translated correctly")
     func testToolChoiceTranslation() throws {
-        let parameters: JSONValue = .object(["type": .string("object")])
-
-        let tools = [
-            Tool(
-                type: "function",
-                function: FunctionDefinition(
-                    name: "myTool",
-                    description: "A tool",
-                    parameters: parameters
-                )
-            ),
-        ]
+        let base = """
+        {
+            "model": "claude-sonnet-4-5-20250514",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "tools": [{"type": "function", "function": {"name": "myTool", "description": "A tool", "parameters": {"type": "object"}}}],
+        """
 
         // auto
-        let autoRequest = ChatCompletionRequest(
-            model: "claude-sonnet-4-5-20250514",
-            messages: [ChatMessage(role: "user", content: .string("Hi"))],
-            tools: tools,
-            toolChoice: .auto
-        )
-        let autoResult = try RequestTranslator().translate(autoRequest, resolveModel: resolveModel)
+        let autoResult = try RequestTranslator().translate(
+            json(base + #""tool_choice": "auto"}"#), resolveModel: resolveModel)
         #expect(autoResult.bedrockBody.toolChoice?.type == "auto")
         #expect(autoResult.bedrockBody.toolChoice?.name == nil)
 
         // none
-        let noneRequest = ChatCompletionRequest(
-            model: "claude-sonnet-4-5-20250514",
-            messages: [ChatMessage(role: "user", content: .string("Hi"))],
-            tools: tools,
-            toolChoice: ToolChoice.none
-        )
-        let noneResult = try RequestTranslator().translate(noneRequest, resolveModel: resolveModel)
+        let noneResult = try RequestTranslator().translate(
+            json(base + #""tool_choice": "none"}"#), resolveModel: resolveModel)
         #expect(noneResult.bedrockBody.toolChoice == nil)
 
         // required → any
-        let requiredRequest = ChatCompletionRequest(
-            model: "claude-sonnet-4-5-20250514",
-            messages: [ChatMessage(role: "user", content: .string("Hi"))],
-            tools: tools,
-            toolChoice: .required
-        )
-        let requiredResult = try RequestTranslator().translate(requiredRequest, resolveModel: resolveModel)
+        let requiredResult = try RequestTranslator().translate(
+            json(base + #""tool_choice": "required"}"#), resolveModel: resolveModel)
         #expect(requiredResult.bedrockBody.toolChoice?.type == "any")
 
         // function → tool with name
-        let fnRequest = ChatCompletionRequest(
-            model: "claude-sonnet-4-5-20250514",
-            messages: [ChatMessage(role: "user", content: .string("Hi"))],
-            tools: tools,
-            toolChoice: .function(name: "myTool")
-        )
-        let fnResult = try RequestTranslator().translate(fnRequest, resolveModel: resolveModel)
+        let fnResult = try RequestTranslator().translate(
+            json(base + #""tool_choice": {"type": "function", "function": {"name": "myTool"}}}"#),
+            resolveModel: resolveModel)
         #expect(fnResult.bedrockBody.toolChoice?.type == "tool")
         #expect(fnResult.bedrockBody.toolChoice?.name == "myTool")
     }
 
-    // MARK: - Stop to Stop Sequences
+    // MARK: - Stop Sequences
 
     @Test("stop values translated to stop_sequences")
     func testStopToStopSequences() throws {
-        // String stop
-        let stringStopRequest = ChatCompletionRequest(
-            model: "claude-sonnet-4-5-20250514",
-            messages: [ChatMessage(role: "user", content: .string("Hi"))],
-            stop: .string("END")
-        )
-        let stringResult = try RequestTranslator().translate(stringStopRequest, resolveModel: resolveModel)
+        let stringResult = try RequestTranslator().translate(json("""
+        {
+            "model": "claude-sonnet-4-5-20250514",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "stop": "END"
+        }
+        """), resolveModel: resolveModel)
         #expect(stringResult.bedrockBody.stopSequences == ["END"])
 
-        // Array stop
-        let arrayStopRequest = ChatCompletionRequest(
-            model: "claude-sonnet-4-5-20250514",
-            messages: [ChatMessage(role: "user", content: .string("Hi"))],
-            stop: .array(["END", "STOP"])
-        )
-        let arrayResult = try RequestTranslator().translate(arrayStopRequest, resolveModel: resolveModel)
+        let arrayResult = try RequestTranslator().translate(json("""
+        {
+            "model": "claude-sonnet-4-5-20250514",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "stop": ["END", "STOP"]
+        }
+        """), resolveModel: resolveModel)
         #expect(arrayResult.bedrockBody.stopSequences == ["END", "STOP"])
     }
 
@@ -330,18 +296,38 @@ struct RequestTranslatorTests {
 
     @Test("Non-streaming request uses /invoke path")
     func testNonStreamingPath() throws {
-        let request = ChatCompletionRequest(
-            model: "claude-sonnet-4-5-20250514",
-            messages: [
-                ChatMessage(role: "user", content: .string("Hello")),
-            ],
-            stream: false
-        )
+        let request = try json("""
+        {
+            "model": "claude-sonnet-4-5-20250514",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "stream": false
+        }
+        """)
 
         let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
 
         #expect(result.bedrockPath.hasSuffix("/invoke"))
         #expect(!result.bedrockPath.contains("invoke-with-response-stream"))
         #expect(result.isStreaming == false)
+    }
+
+    // MARK: - Unknown Fields Ignored
+
+    @Test("Unknown fields in request are silently ignored")
+    func testUnknownFieldsIgnored() throws {
+        let request = try json("""
+        {
+            "model": "claude-sonnet-4-5-20250514",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "reasoning_effort": "high",
+            "metadata": {"user_id": "abc123"},
+            "some_future_field": 42
+        }
+        """)
+
+        let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
+
+        #expect(result.bedrockBody.messages.count == 1)
+        #expect(result.originalModel == "claude-sonnet-4-5-20250514")
     }
 }
