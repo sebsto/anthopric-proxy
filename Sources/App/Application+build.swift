@@ -4,19 +4,9 @@ import FoundationEssentials
 import Foundation
 #endif
 
-import AsyncHTTPClient
 import Hummingbird
 import Logging
 import NIOCore
-
-func buildApplication(
-    config: Config,
-    httpClient: HTTPClient,
-    signingClient: AWSSigningClient,
-    logger: Logger
-) -> some ApplicationProtocol {
-    return buildApplication(config: config, signingClient: signingClient, httpClient: httpClient, logger: logger)
-}
 
 func buildApplication<Signer: RequestSigning, Client: HTTPRequestSending>(
     config: Config,

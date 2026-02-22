@@ -57,8 +57,8 @@ struct ProxyCommand: AsyncParsableCommand {
 
         let app = buildApplication(
             config: config,
-            httpClient: httpClient,
             signingClient: signingClient,
+            httpClient: httpClient,
             logger: logger
         )
 
