@@ -114,16 +114,6 @@ struct AWSSigningClient: Sendable {
         return signed
     }
 
-    /// Build the full URL for a Bedrock runtime request (e.g. InvokeModel).
-    func runtimeURL(path: String) -> URL? {
-        URL(string: "https://\(runtimeHost)\(path)")
-    }
-
-    /// Build the full URL for a Bedrock control plane request (e.g. ListFoundationModels).
-    func controlPlaneURL(path: String) -> URL? {
-        URL(string: "https://\(controlPlaneHost)\(path)")
-    }
-
     /// Shut down the underlying AWSClient, releasing credential refresh tasks.
     func shutdown() async throws {
         try await awsClient.shutdown()

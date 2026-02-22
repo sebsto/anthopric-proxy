@@ -302,8 +302,6 @@ struct Usage: Codable, Sendable {
     }
 }
 
-typealias ChatCompletionChunk = ChatCompletionResponse
-
 // MARK: - Error
 
 struct OpenAIErrorResponse: Codable, Sendable {
