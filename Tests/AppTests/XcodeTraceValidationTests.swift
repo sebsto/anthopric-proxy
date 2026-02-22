@@ -13,16 +13,6 @@ private func json(_ string: String) throws -> [String: JSONValue] {
 @Suite("XcodeTraceValidation Tests")
 struct XcodeTraceValidationTests {
 
-    private func resolveModel(_ name: String) throws -> String {
-        let mapping: [String: String] = [
-            "claude-opus-4.6": "anthropic.claude-opus-4-6-v1:0",
-        ]
-        guard let resolved = mapping[name] else {
-            throw TranslationError.emptyMessages
-        }
-        return resolved
-    }
-
     @Test("Xcode trace request translated correctly end-to-end")
     func testXcodeRequestTranslation() throws {
         let request = try json("""
@@ -38,7 +28,7 @@ struct XcodeTraceValidationTests {
         }
         """)
 
-        let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
+        let result = try RequestTranslator().translate(request, bedrockModelId: "anthropic.claude-opus-4-6-v1:0")
 
         #expect(result.bedrockBody.system == "You are a helpful coding assistant integrated into Xcode.")
         #expect(result.bedrockBody.messages.count == 1)

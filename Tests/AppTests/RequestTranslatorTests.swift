@@ -11,19 +11,10 @@ private func json(_ string: String) throws -> [String: JSONValue] {
     try JSONDecoder().decode([String: JSONValue].self, from: Data(string.utf8))
 }
 
+private let defaultBedrockModelId = "anthropic.claude-sonnet-4-5-20250514-v1:0"
+
 @Suite("RequestTranslator Tests")
 struct RequestTranslatorTests {
-
-    private func resolveModel(_ name: String) throws -> String {
-        let mapping: [String: String] = [
-            "claude-sonnet-4-5-20250514": "anthropic.claude-sonnet-4-5-20250514-v1:0",
-            "claude-opus-4.6": "anthropic.claude-opus-4-6-v1:0",
-        ]
-        guard let resolved = mapping[name] else {
-            throw TranslationError.emptyMessages
-        }
-        return resolved
-    }
 
     // MARK: - Basic Translation
 
@@ -37,7 +28,7 @@ struct RequestTranslatorTests {
         }
         """)
 
-        let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
+        let result = try RequestTranslator().translate(request, bedrockModelId: defaultBedrockModelId)
 
         #expect(result.bedrockBody.anthropicVersion == "bedrock-2023-05-31")
         #expect(result.bedrockPath.contains("anthropic.claude-sonnet-4-5-20250514-v1:0"))
@@ -60,7 +51,7 @@ struct RequestTranslatorTests {
         }
         """)
 
-        let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
+        let result = try RequestTranslator().translate(request, bedrockModelId: defaultBedrockModelId)
 
         #expect(result.bedrockBody.system == "You are helpful.")
         #expect(result.bedrockBody.messages.count == 1)
@@ -82,7 +73,7 @@ struct RequestTranslatorTests {
         }
         """)
 
-        let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
+        let result = try RequestTranslator().translate(request, bedrockModelId: defaultBedrockModelId)
 
         #expect(result.bedrockBody.system == "First instruction.\nSecond instruction.")
     }
@@ -98,7 +89,7 @@ struct RequestTranslatorTests {
         }
         """)
 
-        let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
+        let result = try RequestTranslator().translate(request, bedrockModelId: defaultBedrockModelId)
 
         let userMessage = result.bedrockBody.messages[0]
         let expected = AnthropicContent.blocks([.text(TextBlock(text: "Hello"))])
@@ -118,7 +109,7 @@ struct RequestTranslatorTests {
         }
         """)
 
-        let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
+        let result = try RequestTranslator().translate(request, bedrockModelId: defaultBedrockModelId)
 
         let userMessage = result.bedrockBody.messages[0]
         let expected = AnthropicContent.blocks([.text(TextBlock(text: "Hello"))])
@@ -127,8 +118,8 @@ struct RequestTranslatorTests {
 
     // MARK: - Anthropic Prefix Stripping
 
-    @Test("anthropic/ prefix stripped before model resolution")
-    func testAnthropicPrefixStripping() throws {
+    @Test("anthropic/ prefix preserved in originalModel")
+    func testAnthropicPrefixPreserved() throws {
         let request = try json("""
         {
             "model": "anthropic/claude-opus-4.6",
@@ -136,7 +127,7 @@ struct RequestTranslatorTests {
         }
         """)
 
-        let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
+        let result = try RequestTranslator().translate(request, bedrockModelId: "anthropic.claude-opus-4-6-v1:0")
 
         #expect(result.bedrockPath.contains("anthropic.claude-opus-4-6-v1:0"))
         #expect(result.originalModel == "anthropic/claude-opus-4.6")
@@ -153,7 +144,7 @@ struct RequestTranslatorTests {
         }
         """)
 
-        let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
+        let result = try RequestTranslator().translate(request, bedrockModelId: defaultBedrockModelId)
         #expect(result.bedrockBody.maxTokens == 8192)
     }
 
@@ -167,7 +158,7 @@ struct RequestTranslatorTests {
         }
         """)
 
-        let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
+        let result = try RequestTranslator().translate(request, bedrockModelId: defaultBedrockModelId)
         #expect(result.bedrockBody.maxTokens == 1024)
     }
 
@@ -184,7 +175,7 @@ struct RequestTranslatorTests {
         }
         """)
 
-        let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
+        let result = try RequestTranslator().translate(request, bedrockModelId: defaultBedrockModelId)
         #expect(result.includeUsage == true)
     }
 
@@ -212,7 +203,7 @@ struct RequestTranslatorTests {
         }
         """)
 
-        let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
+        let result = try RequestTranslator().translate(request, bedrockModelId: defaultBedrockModelId)
 
         let tools = try #require(result.bedrockBody.tools)
         #expect(tools.count == 1)
@@ -230,7 +221,7 @@ struct RequestTranslatorTests {
         }
         """)
 
-        let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
+        let result = try RequestTranslator().translate(request, bedrockModelId: defaultBedrockModelId)
         #expect(result.bedrockBody.tools == nil)
     }
 
@@ -247,24 +238,24 @@ struct RequestTranslatorTests {
 
         // auto
         let autoResult = try RequestTranslator().translate(
-            json(base + #""tool_choice": "auto"}"#), resolveModel: resolveModel)
+            json(base + #""tool_choice": "auto"}"#), bedrockModelId: defaultBedrockModelId)
         #expect(autoResult.bedrockBody.toolChoice?.type == "auto")
         #expect(autoResult.bedrockBody.toolChoice?.name == nil)
 
         // none
         let noneResult = try RequestTranslator().translate(
-            json(base + #""tool_choice": "none"}"#), resolveModel: resolveModel)
+            json(base + #""tool_choice": "none"}"#), bedrockModelId: defaultBedrockModelId)
         #expect(noneResult.bedrockBody.toolChoice == nil)
 
         // required → any
         let requiredResult = try RequestTranslator().translate(
-            json(base + #""tool_choice": "required"}"#), resolveModel: resolveModel)
+            json(base + #""tool_choice": "required"}"#), bedrockModelId: defaultBedrockModelId)
         #expect(requiredResult.bedrockBody.toolChoice?.type == "any")
 
         // function → tool with name
         let fnResult = try RequestTranslator().translate(
             json(base + #""tool_choice": {"type": "function", "function": {"name": "myTool"}}}"#),
-            resolveModel: resolveModel)
+            bedrockModelId: defaultBedrockModelId)
         #expect(fnResult.bedrockBody.toolChoice?.type == "tool")
         #expect(fnResult.bedrockBody.toolChoice?.name == "myTool")
     }
@@ -279,7 +270,7 @@ struct RequestTranslatorTests {
             "messages": [{"role": "user", "content": "Hi"}],
             "stop": "END"
         }
-        """), resolveModel: resolveModel)
+        """), bedrockModelId: defaultBedrockModelId)
         #expect(stringResult.bedrockBody.stopSequences == ["END"])
 
         let arrayResult = try RequestTranslator().translate(json("""
@@ -288,7 +279,7 @@ struct RequestTranslatorTests {
             "messages": [{"role": "user", "content": "Hi"}],
             "stop": ["END", "STOP"]
         }
-        """), resolveModel: resolveModel)
+        """), bedrockModelId: defaultBedrockModelId)
         #expect(arrayResult.bedrockBody.stopSequences == ["END", "STOP"])
     }
 
@@ -304,7 +295,7 @@ struct RequestTranslatorTests {
         }
         """)
 
-        let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
+        let result = try RequestTranslator().translate(request, bedrockModelId: defaultBedrockModelId)
 
         #expect(result.bedrockPath.hasSuffix("/invoke"))
         #expect(!result.bedrockPath.contains("invoke-with-response-stream"))
@@ -325,7 +316,7 @@ struct RequestTranslatorTests {
         }
         """)
 
-        let result = try RequestTranslator().translate(request, resolveModel: resolveModel)
+        let result = try RequestTranslator().translate(request, bedrockModelId: defaultBedrockModelId)
 
         #expect(result.bedrockBody.messages.count == 1)
         #expect(result.originalModel == "claude-sonnet-4-5-20250514")

@@ -81,9 +81,7 @@ struct ChatCompletionsHandler<Signer: RequestSigning, Client: HTTPRequestSending
         // 3. Translate request
         let translation: RequestTranslation
         do {
-            translation = try RequestTranslator().translate(chatRequest) { _ in
-                resolvedModelID
-            }
+            translation = try RequestTranslator().translate(chatRequest, bedrockModelId: resolvedModelID)
         } catch let error as TranslationError {
             let message: String
             switch error {
