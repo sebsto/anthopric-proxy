@@ -1,5 +1,5 @@
 {
-  "originHash" : "1142fdbf0a667ee189d86016d97a67b3a82f8b027b5576ce77407b48dda1fea6",
+  "originHash" : "bb12d52b5b905c59f4117946ed4802b710fd17768ef9194c70c301a5d35458d6",
   "pins" : [
     {
       "identity" : "async-http-client",
@@ -31,10 +31,10 @@
     {
       "identity" : "soto-core",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/sebsto/soto-core.git",
+      "location" : "https://github.com/soto-project/soto-core.git",
       "state" : {
-        "branch" : "sebsto/sso_credential_provider",
-        "revision" : "d75d719e8c7e30878c3e96f23982a7fd88a83873"
+        "branch" : "main",
+        "revision" : "f207d2f9ae5439e197d79e0ddfd5b07064798218"
       }
     },
     {
