@@ -10,7 +10,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.20.0"),
         .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.31.0"),
-        .package(url: "https://github.com/soto-project/soto-core.git", branch: "main"), //from: "7.12"),
+        .package(url: "https://github.com/soto-project/soto-core.git", from: "7.12.0"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.7.0"),
         .package(url: "https://github.com/apple/swift-configuration.git", from: "1.1.0"),
     ],
